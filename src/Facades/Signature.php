@@ -1,9 +1,9 @@
 <?php
 
-namespace M1guelpf\Web3Login\Facades;
+namespace Kevinpurwito\Web3Login\Facades;
 
 use Illuminate\Support\Facades\Facade;
-use M1guelpf\Web3Login\Signature as BaseClass;
+use Kevinpurwito\Web3Login\Signature as BaseClass;
 
 class Signature extends Facade
 {

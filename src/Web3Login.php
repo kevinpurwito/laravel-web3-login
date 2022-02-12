@@ -1,6 +1,6 @@
 <?php
 
-namespace M1guelpf\Web3Login;
+namespace Kevinpurwito\Web3Login;
 
 class Web3Login
 {

@@ -1,72 +1,86 @@
 <?php
 
-namespace M1guelpf\Web3Login\Http\Controllers;
+namespace Kevinpurwito\Web3Login\Http\Controllers;
 
-use Illuminate\Support\Str;
-use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use M1guelpf\Web3Login\Web3Login;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Model;
-use M1guelpf\Web3Login\Facades\Signature;
-use Illuminate\Auth\AuthenticationException;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use Kevinpurwito\Web3Login\Facades\Signature;
+use Kevinpurwito\Web3Login\Web3Login;
 
 class Web3LoginController
 {
-    public function signature(Request $request)
-    {
-        $request->session()->put('nonce', $nonce = Str::random());
+	protected function getUserModel(): Model
+	{
+		return app(config('auth.providers.users.model'));
+	}
 
-        return Signature::generate($nonce);
-    }
+	protected function getWalletColumn(): string
+	{
+		return strval(config('web3.wallet_address_column', 'wallet'));
+	}
 
-    public function link(Request $request)
-    {
-        $request->validate([
-            'address' => ['required', 'string', 'regex:/0x[a-fA-F0-9]{40}/m'],
-            'signature' => ['required', 'string', 'regex:/^0x([A-Fa-f0-9]{130})$/'],
-        ]);
+	public function signature(Request $request)
+	{
+		$request->session()->put('nonce', $nonce = Str::random());
 
-        if (! Signature::verify($request->session()->pull('nonce'), $request->input('signature'), $request->input('address'))) {
-            throw ValidationException::withMessages(['signature' => 'Signature verification failed.']);
-        }
+		return Signature::generate($nonce);
+	}
 
-        $request->user()->update([
-            'wallet' => strtolower($request->input('address')),
-        ]);
+	public function link(Request $request): JsonResponse
+	{
+		$request->validate([
+			'address' => ['required', 'string', 'regex:/0x[a-fA-F0-9]{40}/m'],
+			'signature' => ['required', 'string', 'regex:/^0x([A-Fa-f0-9]{130})$/'],
+		]);
 
-        return new Response('', 204);
-    }
+		if (! Signature::verify($request->session()->pull('nonce'), $request->input('signature'), $request->input('address'))) {
+			// throw ValidationException::withMessages(['signature' => 'Signature verification failed.']);
+			return response()->json(['success' => false, 'message' => 'Signature verification failed.'], 422);
+		}
 
-    public function login(Request $request)
-    {
-        $request->validate([
-            'address' => ['required', 'string', 'regex:/0x[a-fA-F0-9]{40}/m'],
-            'signature' => ['required', 'string', 'regex:/^0x([A-Fa-f0-9]{130})$/'],
-        ]);
+		$request->user()->update([
+			$this->getWalletColumn() => strtolower($request->input('address')),
+		]);
 
-        if (! Signature::verify($request->session()->pull('nonce'), $request->input('signature'), $request->input('address'))) {
-            throw ValidationException::withMessages(['signature' => 'Signature verification failed.']);
-        }
+		// return new Response('', 204);
+		return response()->json(['success' => true, 'message' => 'User linked.'], 204);
+	}
 
-        if (Web3Login::$retrieveUserCallback) {
-            $user = call_user_func(Web3Login::$retrieveUserCallback, strtolower($request->input('address')));
-        } else {
-            $user = $this->getUserModel()->where('wallet', strtolower($request->input('address')))->first();
-        }
+	public function login(Request $request): JsonResponse
+	{
+		$request->validate([
+			'address' => ['required', 'string', 'regex:/0x[a-fA-F0-9]{40}/m'],
+			'signature' => ['required', 'string', 'regex:/^0x([A-Fa-f0-9]{130})$/'],
+		]);
 
-        if (! $user) {
-            throw ValidationException::withMessages(['address' => 'Address not registered.']);
-        }
+		if (! Signature::verify($request->session()->pull('nonce'), $request->input('signature'), $request->input('address'))) {
+			// throw ValidationException::withMessages(['signature' => 'Signature verification failed.']);
+			return response()->json(['success' => false, 'message' => 'Signature verification failed.'], 422);
+		}
 
-        Auth::login($user);
+		if (Web3Login::$retrieveUserCallback) {
+			$user = call_user_func(Web3Login::$retrieveUserCallback, strtolower($request->input('address')));
+		} else {
+			// $user = $this->getUserModel()->where($this->getWalletColumn(), strtolower($request->input('address')))->first();
 
-        return new Response('', 204);
-    }
+			$user = $this->getUserModel()->firstOrCreate([
+				$this->getWalletColumn() => strtolower($request->input('address')),
+			], [
+				'name' => strtolower($request->input('address')),
+			]);
+		}
 
-    protected function getUserModel() : Model
-    {
-        return app(config('auth.providers.users.model'));
-    }
+		if (! $user) {
+			// throw ValidationException::withMessages(['address' => 'Address not registered.']);
+			return response()->json(['success' => false, 'message' => 'User not found.'], 404);
+		}
+
+		Auth::login($user);
+
+		// return new Response('', 204);
+		return response()->json(['success' => true, 'message' => 'User logged in.'], 204);
+	}
 }
