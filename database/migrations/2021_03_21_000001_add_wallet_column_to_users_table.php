@@ -8,7 +8,7 @@ class AddWalletColumnToUsersTable extends Migration
 {
 	protected function getWalletColumn(): string
 	{
-		return strval(config('web3.wallet_address_column', 'wallet'));
+		return strval(config('web3.wallet_address_column', 'address'));
 	}
 
 	/**
